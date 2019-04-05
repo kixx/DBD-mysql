@@ -4320,6 +4320,16 @@ process:
           }
 	  /* END OF ChopBlanks */
 
+      /*
+        Chop zeroes for DECIMAL field type only
+        https://dev.mysql.com/doc/refman/5.7/en/c-api-data-structures.html
+      */
+          if (buffer->buffer_type == MYSQL_TYPE_DECIMAL || buffer->buffer_type == MYSQL_TYPE_NEWDECIMAL) {
+            while (len && fbh->data[len-1] == '0') { --len; }
+            if (len && fbh->data[len-1] == '.')
+              --len;
+          }
+
           sv_setpvn(sv, fbh->data, len);
 
 #if MYSQL_VERSION_ID >= FIELD_CHARSETNR_VERSION 
