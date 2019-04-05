@@ -27,15 +27,15 @@ ok $dbh->do("DROP TABLE IF EXISTS dbd_mysql_t50chopzeroes"), "drop table if exis
 my $create= <<EOT;
 CREATE TABLE dbd_mysql_t50chopzeroes (
   id INT(4),
-  d_decimal DECIMAL(6,4),
-  d_numeric NUMERIC(6,4),
-  i_integer INTEGER
+  d_decimal DECIMAL(10,5),
+  d_numeric NUMERIC(10,5),
+  f_float   FLOAT(10,5)
 )
 EOT
 
 ok $dbh->do($create), "create table dbd_mysql_t50chopzeroes";
 
-my @fields = qw(d_decimal d_numeric i_integer);
+my @fields = qw(d_decimal d_numeric f_float);
 my $numfields = scalar @fields;
 my $fieldlist = join(', ', @fields);
 
@@ -45,7 +45,7 @@ ok (my $sth2= $dbh->prepare("SELECT $fieldlist FROM dbd_mysql_t50chopzeroes WHER
 
 my $rows;
 
-$rows = [ [1, 0], [2, 1], [3, 2.0], [4, 3.05] ];
+$rows = [ [1, 0], [2, 1], [3, 2.0], [4, 3.5], [5, 4.50], [6, 18.6875], [7, 19.250], [8, 1000] ];
 
 for my $ref (@$rows) {
 	my ($id, $value) = @$ref;
@@ -54,13 +54,15 @@ for my $ref (@$rows) {
 
 	ok $sth2->execute($id);
 
-	$ret_ref = [];
+	my $ret_ref = [];
 	ok ($ret_ref = $sth2->fetchrow_arrayref);
 	for my $i (0 .. $#{$ret_ref}) {
 		my $choppedvalue = $value;
-		my $decimal_field = ($fields[$i] =~ /^d/);
-		$choppedvalue =~ s/\.?0+$// if $decimal_field; # only chop decimal, not non-decimal
-		cmp_ok $ret_ref->[$i], 'eq', $choppedvalue, "ChopZeroes: $fields[$i] should ".($decimal_field ? "" : "not ")."have zeroes chopped";
+        my $got = $ret_ref->[$i];
+        my $decimal_field = ($fields[$i] =~ /^d/);
+        $choppedvalue =~ s/^(\d*[\d.]*?)\.?0*$/$1/ if $decimal_field; # only chop decimal, not non-decimal
+        cmp_ok $got, 'eq', $choppedvalue, "ChopZeroes: $fields[$i] should ".($decimal_field ? "" : "not ")."have zeroes chopped";
+
 	}
 
 }

@@ -4207,6 +4207,7 @@ process:
 
     av= DBIc_DBISTATE(imp_sth)->get_fbav(imp_sth);
     num_fields=mysql_stmt_field_count(imp_sth->stmt);
+    fields= mysql_fetch_fields(imp_sth->result);
     if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
       PerlIO_printf(DBIc_LOGPIO(imp_xxh),
                     "\t\tdbd_st_fetch called mysql_fetch, rc %d num_fields %d\n",
@@ -4321,13 +4322,31 @@ process:
 	  /* END OF ChopBlanks */
 
       /*
-        Chop zeroes for DECIMAL field type only
+        Chop decimal zeroes for NEWDECIMAL field type (DECIMAL/NUMERIC column) only (also DECIMAL for legacy tables)
         https://dev.mysql.com/doc/refman/5.7/en/c-api-data-structures.html
       */
-          if (buffer->buffer_type == MYSQL_TYPE_DECIMAL || buffer->buffer_type == MYSQL_TYPE_NEWDECIMAL) {
-            while (len && fbh->data[len-1] == '0') { --len; }
-            if (len && fbh->data[len-1] == '.')
-              --len;
+          if (fields[i].type == MYSQL_TYPE_NEWDECIMAL || fields[i].type == MYSQL_TYPE_DECIMAL) {
+
+            // scan data buffer for a decimal point
+            int dec_found = 0;
+            int i;
+            for(i = 0; i < len; i++) {
+                if (fbh->data[i] == '.') {
+                    dec_found = 1;
+                    break;
+                }
+            }
+
+            if (dec_found) {
+                if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
+                    PerlIO_printf(DBIc_LOGPIO(imp_xxh), "Field type: %d trimmed from %zu ", fields[i].type, len);
+                while (len > 1 && fbh->data[len-1] == '0') { --len; }
+                if (len && fbh->data[len-1] == '.')
+                    --len;
+                if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
+                    PerlIO_printf(DBIc_LOGPIO(imp_xxh), "to %zu\n", len);
+            }
+
           }
 
           sv_setpvn(sv, fbh->data, len);
@@ -4448,6 +4467,32 @@ process:
           while (len && col[len-1] == ' ')
           {	--len; }
         }
+      /*
+        Chop decimal zeroes for NEWDECIMAL field type (DECIMAL/NUMERIC column) only (also DECIMAL for legacy tables)
+        https://dev.mysql.com/doc/refman/5.7/en/c-api-data-structures.html
+      */
+          if (fields[i].type == MYSQL_TYPE_NEWDECIMAL || fields[i].type == MYSQL_TYPE_DECIMAL) {
+
+            // scan data buffer for a decimal point
+            int dec_found = 0;
+            int i;
+            for(i = 0; i < len; i++) {
+                if (col[i] == '.') {
+                    dec_found = 1;
+                    break;
+                }
+            }
+
+            if (dec_found) {
+                if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
+                    PerlIO_printf(DBIc_LOGPIO(imp_xxh), "Field %d type: %d trimmed from %zu ", i, fields[i].type, len);
+                while (len > 1 && col[len-1] == '0') { --len; }
+                if (len && col[len-1] == '.')
+                    --len;
+                if (DBIc_TRACE_LEVEL(imp_xxh) >= 2)
+                    PerlIO_printf(DBIc_LOGPIO(imp_xxh), "to %zu\n", len);
+            }
+          }
 
         /* Set string value returned from mysql server */
         sv_setpvn(sv, col, len);
